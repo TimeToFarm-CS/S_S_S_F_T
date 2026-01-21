@@ -154,7 +154,7 @@ const app = {
         // Reset copy button if it was in "Copied!" state
         const copyBtn = document.getElementById('btn-copy');
         if (copyBtn) {
-            copyBtn.textContent = 'Copy Content';
+            copyBtn.textContent = 'Copy';
             copyBtn.classList.remove('copied');
         }
 
@@ -325,3 +325,4 @@ const app = {
 };
 
 app.init();
+
