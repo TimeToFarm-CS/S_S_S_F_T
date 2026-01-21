@@ -2,6 +2,7 @@ const app = {
     chapters: [],
     filteredChapters: [],
     currentChapter: null,
+    fontSize: 1.2, // Base font size in rem
     // List of proxies for better reliability
     proxies: [
         { name: 'AllOrigins', url: 'https://api.allorigins.win/get?url=', type: 'json' },
@@ -21,6 +22,7 @@ const app = {
 
         await this.loadChapters();
         this.handleRouting();
+        this.loadFontSize();
 
         window.addEventListener('popstate', () => this.handleRouting());
 
@@ -305,6 +307,20 @@ const app = {
             console.error('Failed to copy: ', err);
             alert('Could not copy text. Please try selecting it manually.');
         });
+    },
+
+    changeFontSize(delta) {
+        this.fontSize = Math.max(0.8, Math.min(2.5, this.fontSize + (delta * 0.1)));
+        document.documentElement.style.setProperty('--reader-font-size', `${this.fontSize}rem`);
+        localStorage.setItem('ss-font-size', this.fontSize);
+    },
+
+    loadFontSize() {
+        const saved = localStorage.getItem('ss-font-size');
+        if (saved) {
+            this.fontSize = parseFloat(saved);
+            document.documentElement.style.setProperty('--reader-font-size', `${this.fontSize}rem`);
+        }
     }
 };
 
