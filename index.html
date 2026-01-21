@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Slave Reader</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body class="dark-theme">
+    <nav class="navbar">
+        <div class="nav-content">
+            <h1 class="logo" onclick="app.showHome()">Shadow Slave</h1>
+            <div class="search-box">
+                <input type="text" id="chapterSearch" placeholder="Search chapters..." oninput="app.filterChapters()">
+            </div>
+        </div>
+    </nav>
+
+    <main id="app-content">
+        <!-- Home View: Chapter List -->
+        <section id="home-view" class="view">
+            <div class="view-header">
+                <h2>Chapters</h2>
+                <div class="stats" id="chapter-stats">Loading...</div>
+            </div>
+            <div id="chapter-list" class="chapter-grid">
+                <!-- Chapters will be injected here -->
+            </div>
+        </section>
+
+        <!-- Reader View: Chapter Content -->
+        <section id="reader-view" class="view hidden">
+            <div class="reader-controls top">
+                <!-- Custom Searchable Dropdown -->
+                <div class="custom-dropdown" id="chapter-dropdown-container">
+                    <div class="dropdown-trigger" onclick="app.toggleDropdown()">
+                        <span id="current-chapter-text">Select Chapter</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div class="dropdown-menu hidden" id="dropdown-menu">
+                        <div class="dropdown-search">
+                            <input type="text" id="dropdownSearch" placeholder="Search chapter..."
+                                oninput="app.filterDropdown()">
+                        </div>
+                        <div class="dropdown-items" id="dropdown-items">
+                            <!-- Items injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="nav-actions">
+                    <button onclick="app.prevChapter()" id="btn-prev-top" class="btn secondary"
+                        title="Previous">⬅️</button>
+                    <button onclick="app.nextChapter()" id="btn-next-top" class="btn secondary" title="Next">➡️</button>
+                    <button onclick="app.copyContent()" id="btn-copy" class="btn secondary" title="Copy">📋</button>
+                </div>
+            </div>
+
+            <article class="reading-area">
+                <h1 id="chapter-title">Chapter Title</h1>
+                <div id="chapter-content" class="content-body">
+                    <!-- Content injected here -->
+                    <div class="loader">
+                        <div class="spinner"></div>
+                        <p>Fetching from StoneScape...</p>
+                    </div>
+                </div>
+            </article>
+
+            <div class="reader-controls bottom">
+                <button onclick="app.prevChapter()" id="btn-prev-bottom" class="btn secondary">⬅️ Previous</button>
+                <button onclick="app.nextChapter()" id="btn-next-bottom" class="btn primary">Next Chapter ➡️</button>
+            </div>
+    </main>
+
+    <button id="back-to-top" class="fab hidden" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+        ↑
+    </button>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
