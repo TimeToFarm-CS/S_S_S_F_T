@@ -1,24 +1,11 @@
 const app = {
     chapters: [],
     filteredChapters: [],
-    currentChapter: null,
+    currentChapter: null, // This will be the chapter ID as a string
     fontSize: 1.2, // Base font size in rem
-    // List of proxies for better reliability
-    proxies: [
-        { name: 'AllOrigins', url: 'https://api.allorigins.win/get?url=', type: 'json' },
-        { name: 'CodeTabs', url: 'https://api.codetabs.com/v1/proxy?quest=', type: 'text' }
-    ],
-    currentProxyIndex: 0,
-    baseUrl: 'https://stonescape.xyz/series/shadow-slave/',
 
     async init() {
         console.log("Initializing app...");
-
-        // Detect local file protocol
-        if (window.location.protocol === 'file:') {
-            console.warn("Project is running via file:// protocol. CORS will block local JSON fetching.");
-            this.showLocalWarning();
-        }
 
         await this.loadChapters();
         this.handleRouting();
@@ -34,38 +21,38 @@ const app = {
         });
     },
 
-    showLocalWarning() {
-        const stats = document.getElementById('chapter-stats');
-        stats.innerHTML = `<span style="color: #fb7185">⚠️ Running locally (CORS Blocked). Please host on GitHub Pages for full functionality.</span>`;
-    },
-
     async loadChapters() {
         try {
-            const response = await fetch('chapters.json');
-            if (!response.ok) throw new Error("CORS or File Not Found");
+            // Using shadow-slave-Chapters.json as the master list
+            const response = await fetch('shadow-slave-Chapters.json');
+            if (!response.ok) throw new Error("Failed to load shadow-slave-Chapters.json");
 
-            this.chapters = await response.json();
-            this.chapters.reverse();
+            const rawData = await response.json();
+
+            // Map the new data format (id, title) to the app's expectation (slug, title)
+            this.chapters = rawData.map(ch => ({
+                title: ch.title,
+                slug: ch.id.toString()
+            }));
+
+            // Sort by ID ascending (น้อยไปมาก)
+            this.chapters.sort((a, b) => parseInt(a.slug) - parseInt(b.slug));
+
             this.filteredChapters = [...this.chapters];
             this.renderChapterList();
             this.renderDropdown();
             document.getElementById('chapter-stats').textContent = `${this.chapters.length} Chapters available`;
         } catch (err) {
-            console.error("Failed to load chapters.json", err);
-            // If local and failed, we can't do much without a server
+            console.error("Failed to load chapters index", err);
+            document.getElementById('chapter-stats').textContent = "Error loading chapters index.";
+
             if (window.location.protocol === 'file:') {
                 document.getElementById('chapter-list').innerHTML = `
                     <div style="grid-column: 1/-1; text-align: center; padding: 2rem; background: rgba(251, 113, 133, 0.1); border-radius: 1rem; border: 1px dashed #fb7185;">
                         <h3 style="color: #fb7185">Local Security Restriction</h3>
-                        <p>Browsers block data loading from your hard drive for security. To test this locally:</p>
-                        <ol style="display: inline-block; text-align: left; margin-top: 1rem; color: var(--text-secondary);">
-                            <li>Upload these files to <b>GitHub Pages</b> (Recommended)</li>
-                            <li>OR Use a local server (e.g., VS Code "Live Server")</li>
-                        </ol>
+                        <p>Browsers block data loading from your hard drive for security. Please host on a server or use VS Code "Live Server".</p>
                     </div>
                 `;
-            } else {
-                document.getElementById('chapter-stats').textContent = "Error loading chapters index.";
             }
         }
     },
@@ -79,7 +66,7 @@ const app = {
         container.innerHTML = this.filteredChapters.map((ch, index) => `
             <div class="chapter-card" onclick="app.openChapter('${ch.slug}')" style="animation-delay: ${Math.min(index * 0.02, 0.5)}s">
                 <h3>${ch.title}</h3>
-                <p class="stats">${ch.slug.replace('shadow-slave-', '')}</p>
+                <p class="stats">Chapter ${ch.slug}</p>
             </div>
         `).join('');
     },
@@ -99,7 +86,6 @@ const app = {
             </div>
         `).join('');
 
-        // Update trigger text
         const current = this.chapters.find(c => c.slug === this.currentChapter);
         if (current) {
             document.getElementById('current-chapter-text').textContent = current.title;
@@ -136,6 +122,23 @@ const app = {
         }
     },
 
+    getChunkFilename(chapterId) {
+        const id = parseInt(chapterId);
+        if (isNaN(id)) return null;
+
+        // Based on filenames like chapters_1231_1280.json
+        // Pattern: Starts at 1231, chunks of 50
+        if (id < 1231 || id > 2720) return null;
+
+        const start = 1231 + Math.floor((id - 1231) / 50) * 50;
+        let end = start + 49;
+
+        // Final file is 2681_2720
+        if (start === 2681) end = 2720;
+
+        return `Chapters/chapters_${start}_${end}.json`;
+    },
+
     async showReader(slug) {
         document.getElementById('home-view').classList.add('hidden');
         document.getElementById('reader-view').classList.remove('hidden');
@@ -143,34 +146,29 @@ const app = {
         window.scrollTo(0, 0);
 
         this.currentChapter = slug;
-
-        // Hide dropdown menu if open
         document.getElementById('dropdown-menu')?.classList.add('hidden');
-        this.renderDropdown(); // Update active state and text
+        this.renderDropdown();
 
         const titleElem = document.getElementById('chapter-title');
         const contentElem = document.getElementById('chapter-content');
 
-        // Reset copy button if it was in "Copied!" state
         const copyBtn = document.getElementById('btn-copy');
         if (copyBtn) {
             copyBtn.textContent = 'Copy';
             copyBtn.classList.remove('copied');
         }
 
-        // --- 1. Check Cache first ---
+        // Cache check
         const cacheKey = `ss-cache-${slug}`;
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
                 const data = JSON.parse(cached);
-                console.log(`Loading ${slug} from cache...`);
                 titleElem.textContent = data.title;
                 contentElem.innerHTML = data.content;
                 document.title = `${data.title} - Shadow Slave Reader`;
-                return; // มุดออกถ้ามีแคสแล้ว
+                return;
             } catch (e) {
-                console.warn("Cache parse error, re-fetching...");
                 localStorage.removeItem(cacheKey);
             }
         }
@@ -178,72 +176,43 @@ const app = {
         contentElem.innerHTML = `
             <div class="loader">
                 <div class="spinner"></div>
-                <p>Connecting to source... (via Proxy)</p>
+                <p>Loading chapter from local data...</p>
             </div>
         `;
-
         titleElem.textContent = "Loading Chapter...";
 
-        // Try proxies one by one
-        let contentFound = false;
-        for (let i = 0; i < this.proxies.length; i++) {
-            const proxy = this.proxies[(this.currentProxyIndex + i) % this.proxies.length];
-            console.log(`Trying proxy: ${proxy.name}`);
+        // Load from local chunk
+        try {
+            const chunkFile = this.getChunkFilename(slug);
+            if (!chunkFile) throw new Error("Chapter out of range or invalid");
 
-            try {
-                const targetUrl = `${this.baseUrl}${slug}/`;
-                const response = await fetch(`${proxy.url}${encodeURIComponent(targetUrl)}`);
+            const response = await fetch(chunkFile);
+            if (!response.ok) throw new Error(`Failed to load ${chunkFile}`);
 
-                let htmlText = '';
-                if (proxy.type === 'json') {
-                    const data = await response.json();
-                    htmlText = data.contents;
-                } else {
-                    htmlText = await response.text();
-                }
+            const chunkData = await response.json();
+            const chapter = chunkData.find(c => c.id.toString() === slug);
 
-                if (!htmlText || htmlText.length < 500) continue; // Likely a fail
+            if (chapter) {
+                const formattedContent = chapter.content.split('\n').map(p => `<p>${p}</p>`).join('');
+                titleElem.textContent = chapter.title;
+                contentElem.innerHTML = formattedContent;
+                document.title = `${chapter.title} - Shadow Slave Reader`;
 
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
-
-                const title = doc.querySelector('.breadcrumb li.active')?.textContent ||
-                    doc.querySelector('h1')?.textContent || slug;
-
-                let content = doc.querySelector('.reading-content .text-left')?.innerHTML ||
-                    doc.querySelector('.reading-content')?.innerHTML;
-
-                if (content && content.length > 100) {
-                    titleElem.textContent = title;
-                    contentElem.innerHTML = content;
-                    document.title = `${title} - Shadow Slave Reader`;
-                    contentFound = true;
-
-                    // --- 2. Save to Cache ---
-                    try {
-                        localStorage.setItem(cacheKey, JSON.stringify({
-                            title: title,
-                            content: content,
-                            timestamp: Date.now()
-                        }));
-                    } catch (e) {
-                        console.warn("LocalStorage full, could not cache chapter");
-                    }
-
-                    this.currentProxyIndex = (this.currentProxyIndex + i) % this.proxies.length; // Save working proxy
-                    break;
-                }
-            } catch (err) {
-                console.warn(`Proxy ${proxy.name} failed:`, err);
+                localStorage.setItem(cacheKey, JSON.stringify({
+                    title: chapter.title,
+                    content: formattedContent,
+                    timestamp: Date.now()
+                }));
+            } else {
+                throw new Error("Chapter not found in chunk");
             }
-        }
-
-        if (!contentFound) {
+        } catch (err) {
+            console.error("Reader Error:", err);
             contentElem.innerHTML = `
                 <div style="text-align: center; color: #fb7185;">
-                    <h3>All Scraping Proxies Failed</h3>
-                    <p>The source site (StoneScape) might be blocking our current proxies or is temporarily down.</p>
-                    <button class="btn primary" onclick="location.reload()" style="margin-top: 1rem">Try Again</button>
+                    <h3>Chapter Not Available</h3>
+                    <p>${err.message}</p>
+                    <button class="btn primary" onclick="app.showHome()" style="margin-top: 1rem">Back to Home</button>
                 </div>
             `;
         }
@@ -272,20 +241,21 @@ const app = {
     },
 
     prevChapter() {
-        const idx = this.chapters.findIndex(c => c.slug === this.currentChapter);
-        if (idx > 0) {
-            this.openChapter(this.chapters[idx - 1].slug);
+        const currentIndex = this.chapters.findIndex(c => c.slug === this.currentChapter);
+        if (currentIndex > 0) {
+            this.openChapter(this.chapters[currentIndex - 1].slug);
         }
     },
 
     nextChapter() {
-        const idx = this.chapters.findIndex(c => c.slug === this.currentChapter);
-        if (idx < this.chapters.length - 1) {
-            this.openChapter(this.chapters[idx + 1].slug);
+        const currentIndex = this.chapters.findIndex(c => c.slug === this.currentChapter);
+        if (currentIndex < this.chapters.length - 1) {
+            this.openChapter(this.chapters[currentIndex + 1].slug);
         }
     },
 
     copyContent() {
+        const title = document.getElementById('chapter-title').innerText;
         const content = document.getElementById('chapter-content').innerText;
         const btn = document.getElementById('btn-copy');
 
@@ -294,7 +264,9 @@ const app = {
             return;
         }
 
-        navigator.clipboard.writeText(content).then(() => {
+        const textToCopy = `${title}\n\n${content}`;
+
+        navigator.clipboard.writeText(textToCopy).then(() => {
             const originalText = btn.textContent;
             btn.textContent = 'Copied!';
             btn.classList.add('copied');
@@ -325,4 +297,3 @@ const app = {
 };
 
 app.init();
-
