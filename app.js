@@ -2,6 +2,7 @@ const app = {
     chapters: [],
     filteredChapters: [],
     currentChapter: null, // This will be the chapter ID as a string
+    currentChunkData: null, // Memory cache for the current chunk
     fontSize: 1.2, // Base font size in rem
 
     async init() {
@@ -126,17 +127,13 @@ const app = {
         const id = parseInt(chapterId);
         if (isNaN(id)) return null;
 
-        // Based on filenames like chapters_1231_1280.json
-        // Pattern: Starts at 1231, chunks of 50
-        if (id < 1231 || id > 2720) return null;
+        // Supabase Pattern: chunks of 100, e.g., 1201_1300, 1301_1400
+        // URL Example: https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Shadow%20Slave/chapters_1301_1400.json
+        const start = Math.floor((id - 1) / 100) * 100 + 1;
+        const end = start + 99;
 
-        const start = 1231 + Math.floor((id - 1231) / 50) * 50;
-        let end = start + 49;
-
-        // Final file is 2681_2720
-        if (start === 2681) end = 2720;
-
-        return `Chapters/chapters_${start}_${end}.json`;
+        const baseUrl = "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Shadow%20Slave/";
+        return `${baseUrl}chapters_${start}_${end}.json`;
     },
 
     async showReader(slug) {
@@ -176,7 +173,7 @@ const app = {
         contentElem.innerHTML = `
             <div class="loader">
                 <div class="spinner"></div>
-                <p>Loading chapter from local data...</p>
+                <p>Loading chapter from Supabase...</p>
             </div>
         `;
         titleElem.textContent = "Loading Chapter...";
@@ -186,11 +183,20 @@ const app = {
             const chunkFile = this.getChunkFilename(slug);
             if (!chunkFile) throw new Error("Chapter out of range or invalid");
 
-            const response = await fetch(chunkFile);
-            if (!response.ok) throw new Error(`Failed to load ${chunkFile}`);
+            let chunkData = this.currentChunkData;
 
-            const chunkData = await response.json();
-            const chapter = chunkData.find(c => c.id.toString() === slug);
+            // If the chunk isn't in memory or it's the wrong chunk, fetch it
+            const currentChunkFileUrl = this.currentChunkData?.url;
+            if (!chunkData || currentChunkFileUrl !== chunkFile) {
+                const response = await fetch(chunkFile);
+                if (!response.ok) throw new Error(`Failed to load ${chunkFile}`);
+                chunkData = await response.json();
+                chunkData.url = chunkFile; // Tag it so we know which one it is
+                this.currentChunkData = chunkData;
+            }
+
+            const chapterIndex = chunkData.findIndex(c => c.id.toString() === slug);
+            const chapter = chapterIndex !== -1 ? chunkData[chapterIndex] : null;
 
             if (chapter) {
                 const formattedContent = chapter.content.split('\n').map(p => `<p>${p}</p>`).join('');
@@ -198,11 +204,29 @@ const app = {
                 contentElem.innerHTML = formattedContent;
                 document.title = `${chapter.title} - Shadow Slave Reader`;
 
+                // Cash the current chapter
                 localStorage.setItem(cacheKey, JSON.stringify({
                     title: chapter.title,
                     content: formattedContent,
                     timestamp: Date.now()
                 }));
+
+                // Look-ahead caching: Pre-cache the next 5 chapters from the same chunk
+                for (let i = 1; i <= 5; i++) {
+                    const nextChapter = chunkData[chapterIndex + i];
+                    if (nextChapter) {
+                        const nextSlug = nextChapter.id.toString();
+                        const nextCacheKey = `ss-cache-${nextSlug}`;
+                        // Only cache if not already present
+                        if (!localStorage.getItem(nextCacheKey)) {
+                            localStorage.setItem(nextCacheKey, JSON.stringify({
+                                title: nextChapter.title,
+                                content: nextChapter.content.split('\n').map(p => `<p>${p}</p>`).join(''),
+                                timestamp: Date.now()
+                            }));
+                        }
+                    }
+                }
             } else {
                 throw new Error("Chapter not found in chunk");
             }
