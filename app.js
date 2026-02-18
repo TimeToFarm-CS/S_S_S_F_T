@@ -205,7 +205,7 @@ const app = {
                 document.title = `${chapter.title} - Shadow Slave Reader`;
 
                 // Cash the current chapter
-                localStorage.setItem(cacheKey, JSON.stringify({
+                this.safeSetItem(cacheKey, JSON.stringify({
                     title: chapter.title,
                     content: formattedContent,
                     timestamp: Date.now()
@@ -219,7 +219,7 @@ const app = {
                         const nextCacheKey = `ss-cache-${nextSlug}`;
                         // Only cache if not already present
                         if (!localStorage.getItem(nextCacheKey)) {
-                            localStorage.setItem(nextCacheKey, JSON.stringify({
+                            this.safeSetItem(nextCacheKey, JSON.stringify({
                                 title: nextChapter.title,
                                 content: nextChapter.content.split('\n').map(p => `<p>${p}</p>`).join(''),
                                 timestamp: Date.now()
@@ -316,6 +316,61 @@ const app = {
         if (saved) {
             this.fontSize = parseFloat(saved);
             document.documentElement.style.setProperty('--reader-font-size', `${this.fontSize}rem`);
+        }
+    },
+
+    clearCache() {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('ss-cache-')) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        alert('Cache cleared! (Settings preserved)');
+        location.reload();
+    },
+
+    safeSetItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            if (e.name === 'QuotaExceededError' || e.code === 22) {
+                console.warn('LocalStorage quota exceeded. Purging old cache...');
+                this.purgeOldCache();
+                try {
+                    localStorage.setItem(key, value);
+                } catch (retryError) {
+                    console.error('Still failed to set item after purge', retryError);
+                }
+            } else {
+                console.error('Error saving to localStorage', e);
+            }
+        }
+    },
+
+    purgeOldCache() {
+        const cachedItems = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('ss-cache-')) {
+                try {
+                    const data = JSON.parse(localStorage.getItem(key));
+                    cachedItems.push({ key, timestamp: data.timestamp || 0 });
+                } catch (e) {
+                    cachedItems.push({ key, timestamp: 0 });
+                }
+            }
+        }
+
+        // Sort by timestamp (oldest first)
+        cachedItems.sort((a, b) => a.timestamp - b.timestamp);
+
+        // Remove the oldest 50% of cached chapters
+        const toRemove = Math.ceil(cachedItems.length / 2);
+        for (let i = 0; i < toRemove; i++) {
+            localStorage.removeItem(cachedItems[i].key);
         }
     }
 };

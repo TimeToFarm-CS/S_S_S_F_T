@@ -314,6 +314,18 @@ main {
     background: #475569;
 }
 
+.search-box {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    border-radius: 0.5rem;
+}
+
 /* Loader */
 .loader {
     text-align: center;
