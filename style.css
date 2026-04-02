@@ -104,6 +104,79 @@ main {
     font-size: 0.9rem;
 }
 
+/* Novel Grid */
+.novel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 2rem;
+}
+
+.novel-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fadeIn 0.5s ease backwards;
+}
+
+.novel-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--accent);
+    box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.5);
+}
+
+.novel-cover {
+    width: 100%;
+    aspect-ratio: 2/3;
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    object-fit: cover;
+}
+
+.novel-info {
+    padding: 1rem;
+}
+
+.novel-info h3 {
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.novel-info p {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Breadcrumbs */
+.breadcrumb {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.breadcrumb .link {
+    cursor: pointer;
+    color: var(--accent);
+}
+
+.breadcrumb .link:hover {
+    text-decoration: underline;
+}
+
+#current-novel-name {
+    color: var(--text-primary);
+}
+
 /* Chapter Grid */
 .chapter-grid {
     display: grid;

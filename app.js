@@ -1,4 +1,21 @@
 const app = {
+    novels: [
+        {
+            id: "shadow-slave",
+            title: "Shadow Slave",
+            cover: "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Shadow%20Slave/Shadow%20Slave.webp",
+            chaptersUrl: "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Shadow%20Slave/shadow-slave-Chapters.json",
+            contentBaseUrl: "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Shadow%20Slave/"
+        },
+        {
+            id: "dorothy-s-forbidden-grimoire",
+            title: "Dorothy's Forbidden Grimoire",
+            cover: "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Dorothy's%20Forbidden%20Grimoire/Dorothy's%20Forbidden%20Grimoire.png",
+            chaptersUrl: "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Dorothy's%20Forbidden%20Grimoire/dorothy-Chapters.json",
+            contentBaseUrl: "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Dorothy's%20Forbidden%20Grimoire/"
+        }
+    ],
+    currentNovel: null,
     chapters: [],
     filteredChapters: [],
     currentChapter: null, // This will be the chapter ID as a string
@@ -8,7 +25,6 @@ const app = {
     async init() {
         console.log("Initializing app...");
 
-        await this.loadChapters();
         this.handleRouting();
         this.loadFontSize();
 
@@ -22,11 +38,45 @@ const app = {
         });
     },
 
-    async loadChapters() {
+    renderNovelList() {
+        const container = document.getElementById('novel-list');
+        const query = document.getElementById('globalSearch')?.value.toLowerCase() || "";
+
+        const filtered = this.novels.filter(n =>
+            n.title.toLowerCase().includes(query)
+        );
+
+        container.innerHTML = filtered.map((novel, index) => `
+            <div class="novel-card" onclick="app.selectNovel('${novel.id}')" style="animation-delay: ${index * 0.1}s">
+                <img src="${novel.cover}" alt="${novel.title}" class="novel-cover" onerror="this.src='https://via.placeholder.com/200x300?text=${novel.title}'" referrerPolicy="no-referrer">
+                <div class="novel-info">
+                    <h3>${novel.title}</h3>
+                    <p>Novel ID: ${novel.id}</p>
+                </div>
+            </div>
+        `).join('');
+
+        document.getElementById('novel-stats').textContent = `${this.novels.length} Novels available`;
+    },
+
+    async selectNovel(novelId) {
+        const url = new URL(window.location);
+        url.searchParams.set('novel', novelId);
+        url.searchParams.delete('chapter');
+        window.history.pushState({}, '', url);
+        await this.handleRouting();
+    },
+
+    async loadChapters(novelId) {
+        const novel = this.novels.find(n => n.id === novelId);
+        if (!novel) return;
+
+        this.currentNovel = novel;
+        document.getElementById('current-novel-name').textContent = novel.title;
+
         try {
-            // Using shadow-slave-Chapters.json as the master list
-            const response = await fetch('shadow-slave-Chapters.json');
-            if (!response.ok) throw new Error("Failed to load shadow-slave-Chapters.json");
+            const response = await fetch(novel.chaptersUrl);
+            if (!response.ok) throw new Error(`Failed to load ${novel.chaptersUrl}`);
 
             const rawData = await response.json();
 
@@ -36,7 +86,7 @@ const app = {
                 slug: ch.id.toString()
             }));
 
-            // Sort by ID ascending (น้อยไปมาก)
+            // Sort by ID ascending
             this.chapters.sort((a, b) => parseInt(a.slug) - parseInt(b.slug));
 
             this.filteredChapters = [...this.chapters];
@@ -46,15 +96,7 @@ const app = {
         } catch (err) {
             console.error("Failed to load chapters index", err);
             document.getElementById('chapter-stats').textContent = "Error loading chapters index.";
-
-            if (window.location.protocol === 'file:') {
-                document.getElementById('chapter-list').innerHTML = `
-                    <div style="grid-column: 1/-1; text-align: center; padding: 2rem; background: rgba(251, 113, 133, 0.1); border-radius: 1rem; border: 1px dashed #fb7185;">
-                        <h3 style="color: #fb7185">Local Security Restriction</h3>
-                        <p>Browsers block data loading from your hard drive for security. Please host on a server or use VS Code "Live Server".</p>
-                    </div>
-                `;
-            }
+            document.getElementById('chapter-list').innerHTML = `<p style="grid-column: 1/-1; text-align: center; padding: 2rem;">Error loading chapters for ${novel.title}.</p>`;
         }
     },
 
@@ -105,41 +147,58 @@ const app = {
         this.renderDropdown();
     },
 
-    filterChapters() {
-        const query = document.getElementById('chapterSearch').value.toLowerCase();
-        this.filteredChapters = this.chapters.filter(ch =>
-            ch.title.toLowerCase().includes(query) || ch.slug.toLowerCase().includes(query)
-        );
-        this.renderChapterList();
+    filterContent() {
+        const query = document.getElementById('globalSearch').value.toLowerCase();
+
+        if (!document.getElementById('novels-view').classList.contains('hidden')) {
+            this.renderNovelList();
+        } else if (!document.getElementById('home-view').classList.contains('hidden')) {
+            this.filteredChapters = this.chapters.filter(ch =>
+                ch.title.toLowerCase().includes(query) || ch.slug.toLowerCase().includes(query)
+            );
+            this.renderChapterList();
+        }
     },
 
     handleRouting() {
         const params = new URLSearchParams(window.location.search);
-        const slug = params.get('chapter');
-        if (slug) {
-            this.showReader(slug);
+        const novelId = params.get('novel');
+        const chapterSlug = params.get('chapter');
+
+        if (chapterSlug && novelId) {
+            // If we have a chapter, we must have a novel loaded
+            if (!this.currentNovel || this.currentNovel.id !== novelId) {
+                this.loadChapters(novelId).then(() => {
+                    this.showReader(chapterSlug);
+                });
+            } else {
+                this.showReader(chapterSlug);
+            }
+        } else if (novelId) {
+            this.showHome(novelId, false);
         } else {
-            this.showHome();
+            this.showNovelList(false);
         }
     },
 
     getChunkFilename(chapterId) {
+        if (!this.currentNovel) return null;
         const id = parseInt(chapterId);
         if (isNaN(id)) return null;
 
-        // Supabase Pattern: chunks of 100, e.g., 1201_1300, 1301_1400
-        // URL Example: https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Shadow%20Slave/chapters_1301_1400.json
+        // Pattern: chunks of 100
         const start = Math.floor((id - 1) / 100) * 100 + 1;
         const end = start + 99;
 
-        const baseUrl = "https://zxjsrhdzatzfvwiobddo.supabase.co/storage/v1/object/public/Shadow%20Slave/";
+        const baseUrl = this.currentNovel.contentBaseUrl;
         return `${baseUrl}chapters_${start}_${end}.json`;
     },
 
     async showReader(slug) {
+        document.getElementById('novels-view').classList.add('hidden');
         document.getElementById('home-view').classList.add('hidden');
         document.getElementById('reader-view').classList.remove('hidden');
-        document.getElementById('chapterSearch').parentElement.classList.add('hidden');
+        document.getElementById('globalSearch').parentElement.classList.add('hidden');
         window.scrollTo(0, 0);
 
         this.currentChapter = slug;
@@ -156,14 +215,14 @@ const app = {
         }
 
         // Cache check
-        const cacheKey = `ss-cache-${slug}`;
+        const cacheKey = `${this.currentNovel.id}-cache-${slug}`;
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
                 const data = JSON.parse(cached);
                 titleElem.textContent = data.title;
                 contentElem.innerHTML = data.content;
-                document.title = `${data.title} - Shadow Slave Reader`;
+                document.title = `${data.title} - ${this.currentNovel.title}`;
                 return;
             } catch (e) {
                 localStorage.removeItem(cacheKey);
@@ -173,7 +232,7 @@ const app = {
         contentElem.innerHTML = `
             <div class="loader">
                 <div class="spinner"></div>
-                <p>Loading chapter from Supabase...</p>
+                <p>Loading chapter...</p>
             </div>
         `;
         titleElem.textContent = "Loading Chapter...";
@@ -199,10 +258,11 @@ const app = {
             const chapter = chapterIndex !== -1 ? chunkData[chapterIndex] : null;
 
             if (chapter) {
-                const formattedContent = chapter.content.split('\n').map(p => `<p>${p}</p>`).join('');
+                const paragraphs = Array.isArray(chapter.content) ? chapter.content : chapter.content.split('\n');
+                const formattedContent = paragraphs.filter(p => p.trim() !== '').map(p => `<p>${p}</p>`).join('');
                 titleElem.textContent = chapter.title;
                 contentElem.innerHTML = formattedContent;
-                document.title = `${chapter.title} - Shadow Slave Reader`;
+                document.title = `${chapter.title} - ${this.currentNovel.title}`;
 
                 // Cash the current chapter
                 this.safeSetItem(cacheKey, JSON.stringify({
@@ -216,12 +276,13 @@ const app = {
                     const nextChapter = chunkData[chapterIndex + i];
                     if (nextChapter) {
                         const nextSlug = nextChapter.id.toString();
-                        const nextCacheKey = `ss-cache-${nextSlug}`;
+                        const nextCacheKey = `${this.currentNovel.id}-cache-${nextSlug}`;
                         // Only cache if not already present
                         if (!localStorage.getItem(nextCacheKey)) {
+                            const nextParagraphs = Array.isArray(nextChapter.content) ? nextChapter.content : nextChapter.content.split('\n');
                             this.safeSetItem(nextCacheKey, JSON.stringify({
                                 title: nextChapter.title,
-                                content: nextChapter.content.split('\n').map(p => `<p>${p}</p>`).join(''),
+                                content: nextParagraphs.filter(p => p.trim() !== '').map(p => `<p>${p}</p>`).join(''),
                                 timestamp: Date.now()
                             }));
                         }
@@ -236,25 +297,54 @@ const app = {
                 <div style="text-align: center; color: #fb7185;">
                     <h3>Chapter Not Available</h3>
                     <p>${err.message}</p>
-                    <button class="btn primary" onclick="app.showHome()" style="margin-top: 1rem">Back to Home</button>
+                    <button class="btn primary" onclick="app.showHome('${this.currentNovel.id}')" style="margin-top: 1rem">Back to Chapters</button>
                 </div>
             `;
         }
     },
 
-    showHome() {
+    showNovelList(push = true) {
+        document.getElementById('novels-view').classList.remove('hidden');
+        document.getElementById('home-view').classList.add('hidden');
+        document.getElementById('reader-view').classList.add('hidden');
+        document.getElementById('globalSearch').parentElement.classList.remove('hidden');
+        document.title = "Novel Reader";
+
+        if (push) {
+            const url = new URL(window.location);
+            url.searchParams.delete('novel');
+            url.searchParams.delete('chapter');
+            window.history.pushState({}, '', url);
+        }
+
+        this.renderNovelList();
+    },
+
+    async showHome(novelId, push = true) {
+        document.getElementById('novels-view').classList.add('hidden');
         document.getElementById('home-view').classList.remove('hidden');
         document.getElementById('reader-view').classList.add('hidden');
-        document.getElementById('chapterSearch').parentElement.classList.remove('hidden');
-        document.title = "Shadow Slave Reader";
+        document.getElementById('globalSearch').parentElement.classList.remove('hidden');
 
-        const url = new URL(window.location);
-        url.searchParams.delete('chapter');
-        window.history.pushState({}, '', url);
+        if (!this.currentNovel || this.currentNovel.id !== novelId) {
+            await this.loadChapters(novelId);
+        } else {
+            this.renderChapterList();
+        }
+
+        document.title = `${this.currentNovel.title} - Chapters`;
+
+        if (push) {
+            const url = new URL(window.location);
+            url.searchParams.set('novel', novelId);
+            url.searchParams.delete('chapter');
+            window.history.pushState({}, '', url);
+        }
     },
 
     openChapter(slug) {
         const url = new URL(window.location);
+        url.searchParams.set('novel', this.currentNovel.id);
         url.searchParams.set('chapter', slug);
         window.history.pushState({}, '', url);
         this.showReader(slug);
@@ -280,13 +370,18 @@ const app = {
 
     copyContent() {
         const title = document.getElementById('chapter-title').innerText;
-        const content = document.getElementById('chapter-content').innerText;
+        const rawContent = document.getElementById('chapter-content').innerText;
         const btn = document.getElementById('btn-copy');
 
-        if (!content || content.length < 10) {
+        if (!rawContent || rawContent.length < 10) {
             alert("Nothing to copy yet!");
             return;
         }
+
+        // Remove leading full-width spaces (　) and regular spaces from each line
+        const content = rawContent.split('\n')
+            .map(line => line.replace(/^[　\s]+/g, ''))
+            .join('\n');
 
         const textToCopy = `${title}\n\n${content}`;
 
@@ -323,7 +418,7 @@ const app = {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key.startsWith('ss-cache-')) {
+            if (key && key.includes('-cache-')) {
                 keysToRemove.push(key);
             }
         }
@@ -354,7 +449,7 @@ const app = {
         const cachedItems = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key.startsWith('ss-cache-')) {
+            if (key && key.includes('-cache-')) {
                 try {
                     const data = JSON.parse(localStorage.getItem(key));
                     cachedItems.push({ key, timestamp: data.timestamp || 0 });
