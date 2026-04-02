@@ -182,13 +182,23 @@ const app = {
     },
 
     getChunkFilename(chapterId) {
-        if (!this.currentNovel) return null;
+        if (!this.currentNovel || this.chapters.length === 0) return null;
         const id = parseInt(chapterId);
         if (isNaN(id)) return null;
 
-        // Pattern: chunks of 100
+        // Standard pattern: chunks of 100
         const start = Math.floor((id - 1) / 100) * 100 + 1;
-        const end = start + 99;
+        let end = start + 99;
+
+        // Support for "leftover" chunks (e.g., the last chunk might be 801_828 instead of 801_900)
+        // We get the max ID from our loaded chapters list
+        const maxId = parseInt(this.chapters[this.chapters.length - 1].slug);
+        
+        // If the calculated end exceeds the actual last chapter, 
+        // and we are in the range of the last chunk, adjust the end number.
+        if (end > maxId && id >= start) {
+            end = maxId;
+        }
 
         const baseUrl = this.currentNovel.contentBaseUrl;
         return `${baseUrl}chapters_${start}_${end}.json`;
